@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Disaster Tweet Checker</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #f5f6f8; margin: 0; padding: 2rem 1rem; color: #1f2933; }
+  .card { max-width: 640px; margin: 0 auto; background: #fff; border-radius: 12px; padding: 1.5rem; box-shadow: 0 2px 10px rgba(0,0,0,.08); }
+  h1 { margin-top: 0; font-size: 1.4rem; }
+  p.sub { color: #52606d; margin-top: -.5rem; }
+  textarea { width: 100%; box-sizing: border-box; height: 110px; padding: .75rem; font-size: 1rem; border: 1px solid #cbd2d9; border-radius: 8px; resize: vertical; }
+  button { margin-top: .75rem; padding: .6rem 1.4rem; font-size: 1rem; border: 0; border-radius: 8px; background: #2563eb; color: #fff; cursor: pointer; }
+  button:disabled { opacity: .6; cursor: default; }
+  #result { margin-top: 1.25rem; display: none; }
+  .badge { display: inline-block; padding: .4rem .9rem; border-radius: 999px; font-weight: 600; color: #fff; }
+  .real { background: #dc2626; } .not { background: #16a34a; } .unsure { background: #d97706; }
+  #highlight { margin-top: 1rem; line-height: 1.9; font-size: 1.05rem; }
+  .pos { background: #bbf7d0; border-radius: 4px; padding: 0 3px; }
+  .neg { background: #fecaca; border-radius: 4px; padding: 0 3px; }
+  .legend { font-size: .85rem; color: #52606d; margin-top: .5rem; }
+  .note { font-size: .8rem; color: #7b8794; margin-top: 1.5rem; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Disaster Tweet Checker</h1>
+  <p class="sub">Paste a tweet to see if it reports a real disaster.</p>
+  <textarea id="tweet" placeholder="e.g. Forest fire near the highway, people are trapped"></textarea>
+  <button id="btn">Check</button>
+
+  <div id="result">
+    <span id="badge" class="badge"></span>
+    <span id="prob"></span>
+    <div id="highlight"></div>
+    <div class="legend">
+      <span class="pos">green</span> pushes toward "real disaster" &nbsp;
+      <span class="neg">red</span> pushes toward "not a disaster"
+    </div>
+  </div>
+
+  <p class="note">Decision-support demo. Predictions between 40% and 60% are flagged for human review. This tool does not verify facts or replace emergency services.</p>
+</div>
+
+<script>
+const btn = document.getElementById("btn");
+
+btn.addEventListener("click", async () => {
+  const text = document.getElementById("tweet").value.trim();
+  if (!text) return;
+  btn.disabled = true;
+  btn.textContent = "Checking...";
+  try {
+    const res = await fetch("https://disaster-tweets-api-padhu-fthmcde0gxewdghf.centralindia-01.azurewebsites.net/api/predict", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text })
+    });
+    if (!res.ok) throw new Error("Request failed");
+    show(text, await res.json());
+  } catch (e) {
+    alert("Something went wrong. Please try again.");
+  }
+  btn.disabled = false;
+  btn.textContent = "Check";
+});
+
+function show(text, data) {
+  document.getElementById("result").style.display = "block";
+
+  const badge = document.getElementById("badge");
+  badge.textContent = data.label;
+  badge.className = "badge " + (data.label.startsWith("Real") ? "real"
+                    : data.label.startsWith("Not") ? "not" : "unsure");
+  document.getElementById("prob").textContent =
+    " Probability of real disaster: " + Math.round(data.probability * 100) + "%";
+
+  const effects = {};
+  data.words.forEach(w => { effects[w.word] = w.effect; });
+
+  const box = document.getElementById("highlight");
+  box.textContent = "";
+  text.split(/(\s+)/).forEach(tok => {
+    const key = tok.toLowerCase().replace(/[^a-z']/g, "");
+    const span = document.createElement("span");
+    span.textContent = tok;
+    if (key in effects) span.className = effects[key] >= 0 ? "pos" : "neg";
+    box.appendChild(span);
+  });
+}
+</script>
+</body>
+</html>
